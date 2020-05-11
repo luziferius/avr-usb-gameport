@@ -131,6 +131,8 @@ add_definitions("-c")
 # include search paths
 ##########################################################################
 include_directories(${AVR-Gameport_SOURCE_DIR}/usbdrv)
+include_directories(${AVR-Gameport_SOURCE_DIR}/src/include)
+
 
 ##########################################################################
 # building library and application in their subdirectories

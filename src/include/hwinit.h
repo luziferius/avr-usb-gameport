@@ -14,25 +14,10 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <stdlib.h>
-#include <avr/io.h>
-#include <avr/sleep.h>
-#include <avr/interrupt.h>
 
-#include "usbdrv.h"
-
-#include "hwinit.h"
-
-int main() {
-    
-    hwinit();
-    
-
-    for(;;) {
-
-    }
-}
-
-
-
-
+/**
+ * Performs hardware initialisation:
+ * - Sets the oscillator frequency
+ * - Disable unneccessary hardware components
+ */
+void hwinit();
