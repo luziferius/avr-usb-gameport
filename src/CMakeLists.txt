@@ -5,6 +5,8 @@ add_avr_executable(
    avr-gameport
    
    main
+   hwinit
+   analog_read
 )
 
 # #####################################################################

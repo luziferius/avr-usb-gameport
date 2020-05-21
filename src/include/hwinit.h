@@ -14,10 +14,15 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef HWINIT_H_INCLUDED
+#define HWINIT_H_INCLUDED
 
 /**
  * Performs hardware initialisation:
  * - Sets the oscillator frequency
  * - Disable unneccessary hardware components
  */
+
 void hwinit();
+
+#endif // HWINIT_H_INCLUDED

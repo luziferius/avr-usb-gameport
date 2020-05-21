@@ -18,31 +18,74 @@
 
 #include "hwinit.h"
 
+
+
 void hwinit() {
  
     // Disable some unused components: USART, SPI, 16 bit TIMER1
     PRR |=  _BV(PRUSART0) | _BV(PRSPI) | _BV(PRTIM1);
     
-    // Enable the ADC. See Datasheet: Chapter 28.2,  p. 305:
-    // “The Power Reduction ADC bit in the Power Reduction Register (PRR.PRADC)
-    // must be written to '0' in order to be enable the ADC.”
+    /* Enable the ADC. See Datasheet: Chapter 28.2,  page 305:
+     * “The Power Reduction ADC bit in the Power Reduction Register (PRR.PRADC)
+     * must be written to '0' in order to be enable the ADC.”
+     */
     PRR &= ~_BV(PRADC);
     
-    // Set the oscillator to 12.8 MHz, which is the only available frequency
-    // usable with both V-USB and the ATmega328P. Value empirically determined.
-    // TODO: Read this value from the EEPROM, instead of hardcoding it here, as it
-    // has to be configured individually per device.
+    /* Set the oscillator to 12.8 MHz, which is the only available frequency
+     * usable with both V-USB and the ATmega328P’s internal oscillator.
+     * V-USB can only use a device clock of 12.8MHz or 16.5 MHz when using the device-internal oscillator,
+     * but the ATmega328P can only be tuned to 12.8 MHz, as the internal oscillator maxes out at about 15MHz.
+     * OSCCAL value empirically determined.
+     * TODO: Read this value from the EEPROM, instead of hardcoding it here, as it
+     * has to be configured individually per device.
+     */
     OSCCAL = 218;
     
     /* Datasheed: 28.9.2. ADC Control and Status Register A, page 319:
-     * Set the ADC prescaler to 128. Sets the ADC frequency to F_CPU/128 = 12.8MHz/128 = 100 kHz,
-     * Which is in the range for high precision (50-200Mhz).
+     * Enable the ADC circuitry:
+     * - Enable the circuitry (ADEN)
+     * - Enable the ADC Conversion Complete Interrupt (ADIE)
+     * - Set the ADC prescaler to 128. Sets the ADC frequency to F_CPU/128 = 12.8MHz/128 = 100 kHz,
+     *   which is in the range for high precision (50-200Mhz).
+     * 
+     * TODO: If this is too slow, use a divider value of 64 to reach 200 kHz,
+     *       which is denoted as the upper limit for 10 bit ADC output.
      * 
      * Datasheet: 28.4. Prescaling and Conversion Timing, page 308:
      * “By default, the successive approximation circuitry requires an input clock frequency between 50kHz and
      * 200kHz to get maximum resolution. If a lower resolution than 10 bits is needed, the input clock frequency
      * to the ADC can be higher than 200kHz to get a higher sample rate.”
      */
-    ADCSRA |= _BV(ADPS0) | _BV(ADPS1) | _BV(ADPS2);
+    ADCSRA |= _BV(ADPS0) | _BV(ADPS1) | _BV(ADPS2)
+            | _BV(ADEN)
+            | _BV(ADIE);
     
+    /* Datasheet: 28.9.8. Digital Input Disable Register 0, page 326:
+     * “When the respective bits are written to logic one, the digital input buffer on the corresponding ADC pin is
+     *  disabled. The corresponding PIN Register bit will always read as zero when this bit is set. When an
+     *  analog signal is applied to the ADC7...0 pin and the digital input from this pin is not needed, this bit should
+     *  be written logic one to reduce power consumption in the digital input buffer.”
+     * 
+     * Use Port C 0 to read the analog axis signals.
+     */
+    DIDR0 |= _BV(ADC0D);
+    
+    /* Configure Port B to control the resistor battery multiplexer and the axis selection multiplexer.
+     * Each is driven by three bits of Port B. So configure these pins as outputs.
+     */
+    PORTB &= ~ (_BV(PORTB0) | _BV(PORTB1) |  _BV(PORTB2) |  _BV(PORTB3) |  _BV(PORTB4) |  _BV(PORTB5));
+    DDRB |= _BV(DDB0) | _BV(DDB1) |  _BV(DDB2) |  _BV(DDB3) |  _BV(DDB4) |  _BV(DDB5);
+    
+    
+    /* Datasheet:18.2.6. Unconnected Pins:
+     * “If some pins are unused, it is recommended to ensure that these pins have a defined level. […]
+     * The simplest method to ensure a defined level of an unused pin, is to enable the internal pull-up.”
+     * 
+     * Enable the pull-up for all unused pins.
+     * 
+     * TODO: Enable this section when the circuitry isfully designed and
+     * configure all unused pins as input with enabled pull-up resistors.
+     */
+     // DDRC &= ~ (_BV(DDC1) |  _BV(DDC2) |  _BV(DDC3) |  _BV(DDC4) |  _BV(DDC5));
+     // PORTC |= _BV(PORTC1) |  _BV(PORTC2) |  _BV(PORTC3) |  _BV(PORTC4) |  _BV(PORTC5);
 }

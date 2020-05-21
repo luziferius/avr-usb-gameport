@@ -19,7 +19,7 @@
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
 
-#include "usbdrv.h"
+//#include "usbdrv.h"
 
 #include "hwinit.h"
 
@@ -29,7 +29,7 @@ int main() {
     
 
     for(;;) {
-
+        
     }
 }
 
