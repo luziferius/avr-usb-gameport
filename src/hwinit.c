@@ -19,17 +19,10 @@
 #include "hwinit.h"
 
 
-
 void hwinit() {
  
     // Disable some unused components: USART, SPI, 16 bit TIMER1
     PRR |=  _BV(PRUSART0) | _BV(PRSPI) | _BV(PRTIM1);
-    
-    /* Enable the ADC. See Datasheet: Chapter 28.2,  page 305:
-     * “The Power Reduction ADC bit in the Power Reduction Register (PRR.PRADC)
-     * must be written to '0' in order to be enable the ADC.”
-     */
-    PRR &= ~_BV(PRADC);
     
     /* Set the oscillator to 12.8 MHz, which is the only available frequency
      * usable with both V-USB and the ATmega328P’s internal oscillator.
@@ -40,6 +33,12 @@ void hwinit() {
      * has to be configured individually per device.
      */
     OSCCAL = 218;
+    
+    /* Enable the ADC. See Datasheet: Chapter 28.2,  page 305:
+     * “The Power Reduction ADC bit in the Power Reduction Register (PRR.PRADC)
+     * must be written to '0' in order to be enable the ADC.”
+     */
+    PRR &= ~_BV(PRADC);
     
     /* Datasheed: 28.9.2. ADC Control and Status Register A, page 319:
      * Enable the ADC circuitry:
@@ -59,6 +58,20 @@ void hwinit() {
     ADCSRA |= _BV(ADPS0) | _BV(ADPS1) | _BV(ADPS2)
             | _BV(ADEN)
             | _BV(ADIE);
+            
+    /* Datasheet: 28.9.1. ADC Multiplexer Selection Register, page 317:
+     * - Use channel PORTC4 (0x04) to read the analog axis data.
+     * - Do not modify the upper 3 bits REFS1, REFS0, ADLAR.
+     */
+    ADMUX = (ADMUX & 0xE0) | 0x04;
+    
+    
+    /* Port C is used to read the digital buttons (pins 0-3) and the analog axis (pin 4).
+     * Configure these pins as inputs. Pressing joystick buttons pulls the pin low, so enable the pull-up resistors
+     * for the relevant bits.
+     */
+    DDRC &= ~ (_BV(DDC0) | _BV(DDC1) | _BV(DDC2) | _BV(DDC3) | _BV(DDC4));
+    PORTC |= _BV(PORTC0) | _BV(PORTC1) | _BV(PORTC2) | _BV(PORTC3);
     
     /* Datasheet: 28.9.8. Digital Input Disable Register 0, page 326:
      * “When the respective bits are written to logic one, the digital input buffer on the corresponding ADC pin is
@@ -66,16 +79,15 @@ void hwinit() {
      *  analog signal is applied to the ADC7...0 pin and the digital input from this pin is not needed, this bit should
      *  be written logic one to reduce power consumption in the digital input buffer.”
      * 
-     * Use Port C 0 to read the analog axis signals.
+     * Use Port C 4 to read the analog axis signals.
      */
-    DIDR0 |= _BV(ADC0D);
+    DIDR0 |= _BV(ADC4D);
     
     /* Configure Port B to control the resistor battery multiplexer and the axis selection multiplexer.
      * Each is driven by three bits of Port B. So configure these pins as outputs.
      */
     PORTB &= ~ (_BV(PORTB0) | _BV(PORTB1) |  _BV(PORTB2) |  _BV(PORTB3) |  _BV(PORTB4) |  _BV(PORTB5));
-    DDRB |= _BV(DDB0) | _BV(DDB1) |  _BV(DDB2) |  _BV(DDB3) |  _BV(DDB4) |  _BV(DDB5);
-    
+    DDRB |= _BV(DDB0) | _BV(DDB1) |  _BV(DDB2) |  _BV(DDB3) |  _BV(DDB4) |  _BV(DDB5);    
     
     /* Datasheet:18.2.6. Unconnected Pins:
      * “If some pins are unused, it is recommended to ensure that these pins have a defined level. […]
@@ -83,9 +95,14 @@ void hwinit() {
      * 
      * Enable the pull-up for all unused pins.
      * 
-     * TODO: Enable this section when the circuitry isfully designed and
+     * TODO: Fill this section when the circuitry is fully designed and
      * configure all unused pins as input with enabled pull-up resistors.
      */
-     // DDRC &= ~ (_BV(DDC1) |  _BV(DDC2) |  _BV(DDC3) |  _BV(DDC4) |  _BV(DDC5));
-     // PORTC |= _BV(PORTC1) |  _BV(PORTC2) |  _BV(PORTC3) |  _BV(PORTC4) |  _BV(PORTC5);
+     // DDRD &= ~ (_BV(DDC1) |  _BV(DDC2) |  _BV(DDC3) |  _BV(DDC4) |  _BV(DDC5));
+     // PORTD |= _BV(PORTC1) |  _BV(PORTC2) |  _BV(PORTC3) |  _BV(PORTC4) |  _BV(PORTC5);
+     // The topmost two bits of port B are not used, as these pins may be used in the future to connect an external clock source,
+     // if the internal 12.8MHz clock has proven to be inappropriate.
+     DDRB &= ~ (_BV(DDB6) | _BV(DDB7));
+     PORTB |= _BV(PORTB6) | _BV(PORTB7);
+     PINB |= _BV(PINB6) | _BV(PINB7);
 }

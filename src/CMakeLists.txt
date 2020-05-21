@@ -6,7 +6,7 @@ add_avr_executable(
    
    main
    hwinit
-   analog_read
+   joystick
 )
 
 # #####################################################################

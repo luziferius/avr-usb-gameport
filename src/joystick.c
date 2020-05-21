@@ -17,14 +17,15 @@
 #include <stdint.h>
 
 #include <avr/io.h>
+#include <avr/interrupt.h>
+#include <avr/sleep.h>
 
-#include "analog_read.h"
+#include "joystick.h"
 
-struct joystick_read_t {
-    uint16_t axis[4];
-    uint8_t buttons;
-};
 
+/**
+ * Stores the most recent joystick read. Used to send a data packet over USB.
+ */
 static struct joystick_read_t joystick_read_result;
 
 /* Analog axis use a 100kΩ potentiometer connected to Vcc. To read such an axis,
@@ -43,7 +44,6 @@ static struct joystick_read_t joystick_read_result;
  * If the last measurement is above or below the optimal range, the previous or next range is tried.
  */
 
-
 struct axis_state_t {
     uint8_t axis_1 : 2;
     uint8_t axis_2 : 2;
@@ -51,11 +51,47 @@ struct axis_state_t {
     uint8_t axis_4 : 2;
 } current_axis_range;
 
+inline void set_axis_state(uint8_t axis, uint8_t new_value) {
+    switch(axis) {
+        case(0):
+            current_axis_range.axis_1 = new_value & 0x03;
+            break;
+        case(1):
+            current_axis_range.axis_2 = new_value & 0x03;
+            break;
+        case(2):
+            current_axis_range.axis_3 = new_value & 0x03;
+            break;
+        case(3):
+            current_axis_range.axis_4 = new_value & 0x03;
+            break;
+        default:
+            break;
+    }
+}
+
+inline uint8_t get_axis_state(uint8_t axis) {
+    switch(axis) {
+        case(0):
+            return current_axis_range.axis_1;
+        case(1):
+            return current_axis_range.axis_2;
+        case(2):
+            return current_axis_range.axis_3;
+        case(3):
+            return current_axis_range.axis_4;
+        default:
+            return 0;
+    }
+}
+
 /**
  * If the ADC measures a value above UPPER_THRESHOLD, the axis has a too low resistance,
  * so the divider should switch to the next-lower resistor, for better accuracy.
  */
 #define UPPER_THRESHOLD 0x300
+
+
 /**
  * If the ADC measures a value below LOWER_THRESHOLD, the axis has a too high resistance,
  * so the divider should switch to the next-higher resistor, for better accuracy.
@@ -63,32 +99,94 @@ struct axis_state_t {
 #define LOWER_THRESHOLD 0x00F
 
 
-void read_joystick() {
-    /*
-     * Reads the four digital buttons from Port D 0 - Port D 3.
+ISR(ADC_vect) {
+    /* Called when the ADC interrupt wakes the device. Nothing to do here.
+     * The only purpose is to implicitly clear the interrupt flags in SREG and ADCSRA,
+     * and to wake up the CPU that sleeps during the conversion.
      */
-    joystick_read_result.buttons = PIND & 0x0F;
+}
+
+
+void read_joystick() {
     
-    /*
-     * Reads the four analog axis.
+    /* Reads the four digital buttons from Port C 0-3
+     */
+    joystick_read_result.buttons = PINC & 0x0F;
+
+    /* Reads the four analog axis.
      * 
      * First ORed term selects the measurement range by selecting the
      * last chosen resistor in the resistor battery multiplexer.
      * 
      * The second term selects the axis in the axis multiplexer.
-     * TODO: If the upmost two bits are never needed, (PORTB & 0xD0) may be dropped to 
-     * save some CPU cycles.
+     * 
      */
-    PORTB = (PORTB & 0xD0) | current_axis_range.axis_1;
-    joystick_read_result.axis[0] = analog_read4();
-    
-    PORTB = (PORTB & 0xD0) | current_axis_range.axis_2 | 0x01 << 3;
-    joystick_read_result.axis[1] = analog_read4();
-    
-    PORTB = (PORTB & 0xD0) | current_axis_range.axis_3 | 0x02 << 3;
-    joystick_read_result.axis[2] = analog_read4();
-    
-    PORTB = (PORTB & 0xD0) | current_axis_range.axis_4 | 0x03 << 3;
-    joystick_read_result.axis[3] = analog_read4();
-  
+//#pragma unroll(4)
+    for (uint8_t axis = 0; axis < 4; ++axis) {
+        PINB = get_axis_state(axis) | axis << 3;
+        joystick_read_result.axis[axis] = analog_read();
+    }
+}
+
+/**
+ * An ADC conversion result.
+ */
+union adc_result_t {
+    uint16_t result;
+    uint8_t bytes[2];
+};
+
+void joystick_set_analog_input_pin(const uint8_t channel) {
+    /* Datasheet: 28.9.1. ADC Multiplexer Selection Register, page 317:
+     * - Only allow the plain 8 ADC channels.
+     * - Make sure that the channel selection can not write the upper 3 bits (bits 5, 6 & 7).
+     * - Do not reset the upper 3 bits REFS1, REFS0, ADLAR.
+     */
+    ADMUX = (channel & 0x7) | (ADMUX & 0xE0);
+}
+
+uint16_t analog_read() {
+    /* Enter ADC Noise Reduction Mode
+     * Datasheet: 14.5. ADC Noise Reduction Mode, page 63:
+     * “When the SM[2:0] bits are written to '001', the SLEEP instruction makes the MCU enter ADC Noise
+     * Reduction mode, stopping the CPU but allowing the ADC, the external interrupts, […] to continue
+     * operating (if enabled).”
+     * 
+     * “If the ADC is enabled, a conversion starts automatically when this mode is entered.”
+     */
+    set_sleep_mode(SLEEP_MODE_ADC);
+    sleep_enable();
+    sleep_cpu();
+
+    /* The CPU might have been woken up by an interrupt caused by the USB interface. In this case,
+     * go to sleep again, until the conversion is completed.
+     * Datasheet: 28.3. Starting a Conversion, page 307:
+     * “ADCS will stay high as long as the conversion is in progress, and will be
+     * cleared by hardware when the conversion is completed.”
+     */
+    while (ADCSRA & _BV(ADSC)) {
+        sleep_cpu();
+    }
+    sleep_disable();
+
+    // Conversion finished, the result can be read.
+    union adc_result_t result;
+    /* Datasheet 28.9.3. ADC Data Register Low (ADLAR=0), page 321:
+     * “ADCL must be read first, then ADCH.”
+     */
+    result.bytes[0] = ADCL;
+    result.bytes[1] = ADCH & 0x3;
+
+    return result.result;
+}
+
+uint16_t analog_read4(uint16_t result) {
+    // Compute the arithmetic mean of 4 results.
+    // Each individual component has 10 bit accuracy,
+    // the sum therefore uses at most 12 bits, which fits into a single uint16_t.
+    result += analog_read();
+    result += analog_read();
+    result += analog_read();
+    result >>= 2;
+    return result;
 }
