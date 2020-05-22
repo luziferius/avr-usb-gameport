@@ -28,6 +28,17 @@ struct joystick_read_t {
 };
 
 /**
+ * Reads the joystick values and stores them in the global joystick_read_result variable.
+ */
+void read_joystick();
+
+
+/**
+ * Calibrates the given axis and do an averaged analog read with 4 reads.
+ */
+uint16_t calibrate_and_read_axis(const uint8_t axis);
+
+/**
  * Set the ADC input pin to read from.
  * Should be used to set the channel before reading a value with analog_read().
  * 

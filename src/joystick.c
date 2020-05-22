@@ -26,7 +26,7 @@
 /**
  * Stores the most recent joystick read. Used to send a data packet over USB.
  */
-static struct joystick_read_t joystick_read_result;
+struct joystick_read_t joystick_read_result;
 
 /* Analog axis use a 100kΩ potentiometer connected to Vcc. To read such an axis,
  * the current resistance has to be determined, which can be done by building
@@ -43,34 +43,37 @@ static struct joystick_read_t joystick_read_result;
  * 
  * If the last measurement is above or below the optimal range, the previous or next range is tried.
  */
+#define AXIS_RANGE_BITS 2
 
 struct axis_state_t {
-    uint8_t axis_1 : 2;
-    uint8_t axis_2 : 2;
-    uint8_t axis_3 : 2;
-    uint8_t axis_4 : 2;
+    uint8_t axis_1 : AXIS_RANGE_BITS;
+    uint8_t axis_2 : AXIS_RANGE_BITS;
+    uint8_t axis_3 : AXIS_RANGE_BITS;
+    uint8_t axis_4 : AXIS_RANGE_BITS;
 } current_axis_range;
 
-inline void set_axis_state(uint8_t axis, uint8_t new_value) {
+
+inline void set_selected_resistor(const uint8_t axis, const uint8_t new_multiplexer_channel) {
     switch(axis) {
         case(0):
-            current_axis_range.axis_1 = new_value & 0x03;
+            current_axis_range.axis_1 = new_multiplexer_channel & 0x03;
             break;
         case(1):
-            current_axis_range.axis_2 = new_value & 0x03;
+            current_axis_range.axis_2 = new_multiplexer_channel & 0x03;
             break;
         case(2):
-            current_axis_range.axis_3 = new_value & 0x03;
+            current_axis_range.axis_3 = new_multiplexer_channel & 0x03;
             break;
         case(3):
-            current_axis_range.axis_4 = new_value & 0x03;
+            current_axis_range.axis_4 = new_multiplexer_channel & 0x03;
             break;
         default:
             break;
     }
 }
 
-inline uint8_t get_axis_state(uint8_t axis) {
+
+const inline uint8_t get_selected_resistor(const uint8_t axis) {
     switch(axis) {
         case(0):
             return current_axis_range.axis_1;
@@ -86,17 +89,17 @@ inline uint8_t get_axis_state(uint8_t axis) {
 }
 
 /**
- * If the ADC measures a value above UPPER_THRESHOLD, the axis has a too low resistance,
- * so the divider should switch to the next-lower resistor, for better accuracy.
+ * If the ADC measures a value above ADC_UPPER_THRESHOLD, the axis has a too low resistance,
+ * so the voltage divider should switch to the next-lower resistor, for better accuracy.
  */
-#define UPPER_THRESHOLD 0x300
+#define ADC_UPPER_THRESHOLD 0x300
 
 
 /**
- * If the ADC measures a value below LOWER_THRESHOLD, the axis has a too high resistance,
- * so the divider should switch to the next-higher resistor, for better accuracy.
+ * If the ADC measures a value below ADC_LOWER_THRESHOLD, the axis has a too high resistance,
+ * so the voltage divider should switch to the next-higher resistor, for better accuracy.
  */
-#define LOWER_THRESHOLD 0x00F
+#define ADC_LOWER_THRESHOLD 0x00F
 
 
 ISR(ADC_vect) {
@@ -113,18 +116,9 @@ void read_joystick() {
      */
     joystick_read_result.buttons = PINC & 0x0F;
 
-    /* Reads the four analog axis.
-     * 
-     * First ORed term selects the measurement range by selecting the
-     * last chosen resistor in the resistor battery multiplexer.
-     * 
-     * The second term selects the axis in the axis multiplexer.
-     * 
-     */
 //#pragma unroll(4)
     for (uint8_t axis = 0; axis < 4; ++axis) {
-        PINB = get_axis_state(axis) | axis << 3;
-        joystick_read_result.axis[axis] = analog_read();
+        joystick_read_result.axis[axis] = calibrate_and_read_axis(axis);
     }
 }
 
@@ -143,6 +137,35 @@ void joystick_set_analog_input_pin(const uint8_t channel) {
      * - Do not reset the upper 3 bits REFS1, REFS0, ADLAR.
      */
     ADMUX = (channel & 0x7) | (ADMUX & 0xE0);
+}
+
+
+uint16_t calibrate_and_read_axis(const uint8_t axis) {
+    uint8_t should_step_down, should_step_up;
+    uint16_t axis_value;
+    do {
+        const uint8_t selected_resistor = get_selected_resistor(axis);
+        /* Reads the analog axis.
+        * 
+        * First ORed term selects the measurement range by selecting a
+        * resistor in the resistor battery multiplexer.
+        * 
+        * The second term selects the axis in the axis multiplexer.
+        */
+        PINB = selected_resistor | axis << 3;
+        axis_value = analog_read();
+        
+        should_step_down = selected_resistor && axis_value > ADC_UPPER_THRESHOLD;
+        should_step_up = (selected_resistor + 1) & ~_BV(AXIS_RANGE_BITS)  && axis_value < ADC_LOWER_THRESHOLD;
+        
+        if (should_step_down) {
+            set_selected_resistor(axis, selected_resistor + 1);
+        } else if (should_step_up) {
+            set_selected_resistor(axis, selected_resistor - 1);
+        }
+    } while(should_step_down || should_step_up);
+    
+    return analog_read4(axis_value);
 }
 
 uint16_t analog_read() {
