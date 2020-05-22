@@ -14,5 +14,5 @@ add_avr_executable(
 # #####################################################################
 target_link_libraries(
     avr-gameport.elf
-    libVUsb
+#    libVUsb
 )
