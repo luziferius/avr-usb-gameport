@@ -7,6 +7,7 @@ add_avr_executable(
    main
    hwinit
    joystick
+   usb_descriptor
 )
 
 # #####################################################################
@@ -14,5 +15,5 @@ add_avr_executable(
 # #####################################################################
 target_link_libraries(
     avr-gameport.elf
-#    libVUsb
+    libVUsb
 )
