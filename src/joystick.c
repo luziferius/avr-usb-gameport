@@ -53,7 +53,7 @@ struct axis_state_t {
 } current_axis_range;
 
 
-inline void set_selected_resistor(const uint8_t axis, const uint8_t new_multiplexer_channel) {
+inline void select_resistor(const uint8_t axis, const uint8_t new_multiplexer_channel) {
     switch(axis) {
         case(0):
             current_axis_range.axis_1 = new_multiplexer_channel & 0x03;
@@ -155,16 +155,19 @@ uint16_t calibrate_and_read_axis(const uint8_t axis) {
         PINB = selected_resistor | axis << 3;
         axis_value = analog_read();
         
-        should_step_down = selected_resistor && axis_value > ADC_UPPER_THRESHOLD;
-        should_step_up = (selected_resistor + 1) & ~_BV(AXIS_RANGE_BITS)  && axis_value < ADC_LOWER_THRESHOLD;
+        should_step_down = selected_resistor && (axis_value > ADC_UPPER_THRESHOLD);
+        should_step_up = ((selected_resistor + 1) & ~_BV(AXIS_RANGE_BITS)) && (axis_value < ADC_LOWER_THRESHOLD);
         
         if (should_step_down) {
-            set_selected_resistor(axis, selected_resistor + 1);
+            select_resistor(axis, selected_resistor + 1);
         } else if (should_step_up) {
-            set_selected_resistor(axis, selected_resistor - 1);
+            select_resistor(axis, selected_resistor - 1);
         }
     } while(should_step_down || should_step_up);
-    
+    /* Now, the axis is in the proper range, so read it 3 additional times and average the result of all four reads.
+     * TODO: Is this sufficient for a fast-changing axis? If not, instead average the result of 4 calibrate_and_read_axis() calls
+     * or ditch the averaging completely.
+     */
     return analog_read4(axis_value);
 }
 
@@ -196,6 +199,9 @@ uint16_t analog_read() {
     union adc_result_t result;
     /* Datasheet 28.9.3. ADC Data Register Low (ADLAR=0), page 321:
      * “ADCL must be read first, then ADCH.”
+     * 
+     * The datasheet does not indicate what the upper 5 bits of ADCH read when accessed,
+     * so strip them out when read.
      */
     result.bytes[0] = ADCL;
     result.bytes[1] = ADCH & 0x3;
