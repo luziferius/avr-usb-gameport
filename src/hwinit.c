@@ -15,12 +15,15 @@
  */
 
 #include <avr/io.h>
-
+ #include <avr/wdt.h>
+ 
 #include "hwinit.h"
 
 
 void hwinit() {
- 
+    // Disable the hardware watchdog, which is not used.
+    wdt_disable();
+
     // Disable some unused components: USART, SPI, 16 bit TIMER1
     PRR |=  _BV(PRUSART0) | _BV(PRSPI) | _BV(PRTIM1);
     
