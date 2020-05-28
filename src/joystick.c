@@ -117,9 +117,9 @@ void read_joystick() {
     joystick_read_result.buttons = PINC & 0x0F;
 
 //#pragma unroll(4)
-    for (uint8_t axis = 0; axis < 4; ++axis) {
-        joystick_read_result.axis[axis] = calibrate_and_read_axis(axis);
-    }
+//    for (uint8_t axis = 0; axis < 4; ++axis) {
+//        joystick_read_result.axis[axis] = calibrate_and_read_axis(axis);
+//    }
 }
 
 /**
