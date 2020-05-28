@@ -21,8 +21,9 @@
 
 
 void hwinit() {
-    // Disable the hardware watchdog, which is not used.
-    wdt_disable();
+    // Enable the hardware watchdog, resetting the device, if it gets stuck.
+    wdt_enable(WDTO_1S);
+    wdt_reset();
 
     // Disable some unused components: USART, SPI, 16 bit TIMER1
     PRR |=  _BV(PRUSART0) | _BV(PRSPI) | _BV(PRTIM1);
@@ -108,4 +109,10 @@ void hwinit() {
      DDRB &= ~ (_BV(DDB6) | _BV(DDB7));
      PORTB |= _BV(PORTB6) | _BV(PORTB7);
      PINB |= _BV(PINB6) | _BV(PINB7);
+}
+
+
+void hwinit_debug() {
+    PORTD &=  ~ (_BV(PORTD3));
+    DDRD |= _BV(DDB3);
 }

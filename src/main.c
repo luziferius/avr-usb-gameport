@@ -18,6 +18,7 @@
 #include <avr/io.h>
 #include <avr/sleep.h>
 #include <avr/interrupt.h>
+#include <avr/wdt.h>
 #include <util/delay.h>
 
 #include "usbdrv.h"
@@ -28,6 +29,16 @@
 extern struct joystick_read_t joystick_read_result;
 
 uint8_t idleRate;   /* repeat rate for keyboards, never used for mice/joysticks */
+
+/**
+ * Reset the watchdog.
+ */
+static inline void watchdog_reset() {
+    PIND |= _BV(PIND3);
+    wdt_reset();
+    _delay_us(1);
+    PIND &= ~_BV(PIND3);
+}
 
 usbMsgLen_t usbFunctionSetup(uint8_t data[8])
 {
@@ -56,10 +67,13 @@ usbMsgLen_t usbFunctionSetup(uint8_t data[8])
 
 int main() {
     hwinit();
+    hwinit_debug();
     usbInit();
     //usbDeviceDisconnect();
     _delay_ms(500);
+    watchdog_reset();
     usbDeviceConnect();
+    watchdog_reset();
     sei();
     for(;;) {
         usbPoll();
@@ -67,6 +81,7 @@ int main() {
             read_joystick();
             usbSetInterrupt((void *) &joystick_read_result, sizeof(joystick_read_result));
         }
+        watchdog_reset();
     }
 }
 

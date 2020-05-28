@@ -25,4 +25,11 @@
 
 void hwinit();
 
+
+/**
+ * Performs some additional hardware initialisation, which is used for
+ * debugging purposes.
+ */
+void hwinit_debug();
+
 #endif // HWINIT_H_INCLUDED
