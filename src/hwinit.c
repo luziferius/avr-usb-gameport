@@ -35,7 +35,7 @@ void hwinit() {
      * TODO: Read this value from the EEPROM, instead of hardcoding it here, as it
      * has to be configured individually per device.
      */
-    OSCCAL = 218;
+    OSCCAL = 234;
     
     /* Enable the ADC. See Datasheet: Chapter 28.2,  page 305:
      * “The Power Reduction ADC bit in the Power Reduction Register (PRR.PRADC)
