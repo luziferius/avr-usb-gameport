@@ -57,8 +57,8 @@ usbMsgLen_t usbFunctionSetup(uint8_t data[8])
 int main() {
     hwinit();
     usbInit();
-    usbDeviceDisconnect();
-    _delay_ms(250);
+    //usbDeviceDisconnect();
+    _delay_ms(500);
     usbDeviceConnect();
     sei();
     for(;;) {
